@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace bot
@@ -11,7 +12,7 @@ namespace bot
         private static System.Timers.Timer aTimer;
         int sec = 1000;
         int num_of_sec = 10;
-
+        Thread broadcast_thread;
 
         private static void OnTimedEvent(Object source, System.Timers.ElapsedEventArgs e)
         {

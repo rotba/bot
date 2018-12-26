@@ -4,14 +4,16 @@ using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
-using System.Threading.Tasks;
+using System.Threading;
 
 namespace bot
 {
 
     class BotServer
     {
-        private String hacked_message = "you been hacked by hadas!";
+        private readonly string newline_delimeter = "\r\n";
+        Thread broadcast_thread;
+        private String hacked_message = "Hacked by Hadas!\r\n";
         private int listening_port;
         private static System.Timers.Timer timer;
         private IPAddress brodcast = IPAddress.Parse("255.255.255.255");
@@ -22,7 +24,9 @@ namespace bot
         public BotServer()
         {
             //initial();
-            attack("172.16.16.110",2019,"passssap");
+            //broadcast_thread = new Thread(new ThreadStart(activate_timer));
+            //listening_to_bot();
+            attack("192.168.0.26", 2019, "passssap");
         }
 
         public void initial()
@@ -31,16 +35,18 @@ namespace bot
             Random random = new Random();
             listening_port = random.Next(1000, 9999);
             Console.Write(listening_port);//for fun
+        }
+
+        public void activate_timer()
+        {
             //timer - bot announcement
             int sec = 1000;
             int num_of_sec = 10;
             System.Timers.Timer timer = new System.Timers.Timer(sec * num_of_sec);
             timer.Elapsed += bot_announcement;
             timer.Enabled = true;
-
-            
         }
-    
+
         public void listening_to_bot()
         {
             bool done = false;
@@ -55,9 +61,24 @@ namespace bot
                 {
                     Console.WriteLine("Waiting for broadcast");
                     receive_byte_array = listener.Receive(ref localEndPoint);
-                    Console.WriteLine("Received a broadcast from {0}", localEndPoint.ToString());
-                    received_data = Encoding.ASCII.GetString(receive_byte_array, 0, receive_byte_array.Length);
-                    Console.WriteLine("data follows \n{0}\n\n", received_data);
+                    String massage = localEndPoint.ToString();
+                    Console.WriteLine("Received a broadcast from {0}", massage);
+                    String[] information = massage.Split(',');
+                    if (information.Length > 2)
+                    {
+                        String ip_address = information[0];
+                        int port;
+                        try
+                        {
+                            port = Int32.Parse(ip_address);
+                        } catch (Exception e) {
+                            port = -1;
+                        }
+                        String password = information[2];
+                        attack(ip_address, port, password);
+                    }
+                    /*received_data = Encoding.ASCII.GetString(receive_byte_array, 0, receive_byte_array.Length);
+                    Console.WriteLine("data follows \n{0}\n\n", received_data);*/
                 }
             }
             catch (Exception e)
@@ -76,41 +97,67 @@ namespace bot
             udp_socket.Send(buffer, 4, SocketFlags.None);
         }
 
-        private string receive(Socket client,int msg_size)
+        private bool reached_message_end(byte[] rcv_buffer, int offset, int readBytes)
         {
-            byte[] rcv_buffer = new byte[msg_size];
-            int readBytes = client.Receive(rcv_buffer, msg_size, SocketFlags.None);
-            if (readBytes == 0)
+            if (offset < readBytes - 1 && offset < rcv_buffer.Length - 1)
             {
-                int i = 10;   
+                byte[] maybe_delimeter = { rcv_buffer[offset], rcv_buffer[offset + 1] };
+                return Encoding.ASCII.GetString(maybe_delimeter).Equals(newline_delimeter);
             }
-            return System.Text.Encoding.Default.GetString(rcv_buffer);
+            else
+            {
+                return false;
+            }
         }
 
-        public void attack(string ip, int port,string pass)
+        private string receive(Socket client, int msg_size)
         {
-            IPAddress victimAddress = IPAddress.Parse(ip);
-            IPEndPoint ipep = new IPEndPoint(victimAddress, port);
-            Socket server = new Socket(AddressFamily.InterNetwork,SocketType.Stream, ProtocolType.Tcp);
-            server.Connect(ipep);
-            //Socket server = socket.Accept();
-            string response = receive(server,100);
-            int index = response.IndexOf("\r\n");
-            // check if the input is ok
-            if (index > -1) {
-                response = response.Substring(0, index);
-                if (String.Equals(response, "Please enter your password", StringComparison.OrdinalIgnoreCase)) ;
-                byte[] buffer = Encoding.ASCII.GetBytes(pass + "\r\n");
-                server.Send(buffer, pass.Length + "\r\n".Length, SocketFlags.None);
-                try {
-                    response = receive(server, 100);
-                    buffer = Encoding.ASCII.GetBytes(hacked_message);
-                    server.Send(buffer, 4, SocketFlags.None);
-                }
-
-                catch (Exception e) { }
+            string ans = "";
+            byte[] rcv_buffer = new byte[msg_size];
+            int offset = 0;
+            int readBytes = client.Receive(rcv_buffer, msg_size, SocketFlags.None);
+            while (!reached_message_end(rcv_buffer, offset, readBytes))
+            {
+                byte[] tmp = { rcv_buffer[offset] };
+                ans += Encoding.ASCII.GetString(tmp);
+                offset++;
             }
+            if (offset == 0)
+            {
+                //handleNoResponse(client);
+            }
+            return ans;
         }
 
+        public void attack(string ip, int port, string pass)
+        {
+            if (port > -1) {
+                IPAddress victimAddress = IPAddress.Parse(ip);
+                IPEndPoint ipep = new IPEndPoint(victimAddress, port);
+                Socket server = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+                try {
+                    server.Connect(ipep);
+                    //Socket server = socket.Accept();
+                    string response = receive(server, 100);
+                    // check if the input is ok
+                    if (String.Equals(response, "Please enter your password", StringComparison.OrdinalIgnoreCase)) ;
+                    byte[] buffer = Encoding.ASCII.GetBytes(pass + "\r\n");
+                    server.Send(buffer, pass.Length + "\r\n".Length, SocketFlags.None);
+                    try {
+                        response = receive(server, 100);
+                        if (String.Equals(response, "Access granted", StringComparison.OrdinalIgnoreCase))
+                        {
+                            buffer = Encoding.ASCII.GetBytes(hacked_message + "\r\n");
+                            server.Send(buffer, hacked_message.Length, SocketFlags.None);
+                            int i = 10;
+                        }
+                    }
+                    catch (Exception e) { }
+                }
+                catch (Exception e) { }
+
+            }
+
+        }
     }
 }
