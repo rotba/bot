@@ -16,7 +16,7 @@ namespace bot
             UdpClient for_cc_port = new UdpClient(0);
             int cc_port = ((IPEndPoint)for_cc_port.Client.LocalEndPoint).Port;
             for_cc_port.Close();
-            Console.Write(cc_port);
+            Console.Write("need to initial this on cc as listining port" + cc_port);
             Thread[] threads = new Thread[10];
             for (int i = 0; i < 10; i++)
             {
