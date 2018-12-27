@@ -21,7 +21,7 @@ namespace bot
         private static object sync_lock = new object();
         private static object port_lock = new object();
 
-        public BotServer()
+        public BotServer(int cc_port)
         {
 
             lock (port_lock) {
@@ -31,6 +31,7 @@ namespace bot
                 UdpClient client_for_sending = new UdpClient(0);
                 sending_port = ((IPEndPoint)client_for_sending.Client.LocalEndPoint).Port;
                 client_for_sending.Close();
+                this.cc_port = cc_port;
 
             }
 

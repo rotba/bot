@@ -13,10 +13,14 @@ namespace bot
     {
         static void Main(string[] args)
         {
+            UdpClient for_cc_port = new UdpClient(0);
+            int cc_port = ((IPEndPoint)for_cc_port.Client.LocalEndPoint).Port;
+            for_cc_port.Close();
+            Console.Write(cc_port);
             Thread[] threads = new Thread[10];
             for (int i = 0; i < 10; i++)
             {
-                BotServer bot = new BotServer();
+                BotServer bot = new BotServer(cc_port);
                 threads[i] = new Thread(() => bot.start());
                 threads[i].Start();
             }
