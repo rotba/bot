@@ -20,6 +20,7 @@ namespace bot
         private string _brodcast = "255.255.255.255";
         private static object _sync_lock = new object();
         private static object _port_lock = new object();
+        private readonly bool TEST = true;
 
         public BotServer(int cc_port)
         {

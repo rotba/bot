@@ -13,10 +13,10 @@ namespace bot
     {
         static void Main(string[] args)
         {
+            int num_of_bots = 10;
             int cc_port = 31337;
-            Console.Write("need to initial this on cc as listining port" + cc_port);
-            Thread[] threads = new Thread[10];
-            for (int i = 0; i < 9; i++)
+            Thread[] threads = new Thread[num_of_bots];
+            for (int i = 0; i < threads.Length; i++)
             {
                 BotServer bot = new BotServer(cc_port);
                 threads[i] = new Thread(() => bot.start());
