@@ -27,7 +27,7 @@ namespace bot
             lock (_port_lock) {
                 _listening_port = find_free_port();
                 _sending_port = find_free_port();
-                _cc_port = 15000;
+                _cc_port = cc_port;
 
             }
 
